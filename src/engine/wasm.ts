@@ -10,6 +10,7 @@ export interface CompileResult {
 let instance: OpenSCADInstance | null = null;
 let isLoading = false;
 let isReady = false;
+let busy = false;
 let loadCallbacks: Array<(ready: boolean) => void> = [];
 
 export async function initWASM(
@@ -62,6 +63,11 @@ export async function compileSCAD(
   if (!instance || !isReady) {
     return { success: false, error: "OpenSCAD 未初始化" };
   }
+  if (busy) {
+    return { success: false, error: "正在编译中，请稍候..." };
+  }
+  busy = true;
+  let result: CompileResult = { success: false, error: "未知错误" };
 
   try {
     onProgress?.(10, "正在编译 OpenSCAD 模型...");
@@ -84,7 +90,9 @@ export async function compileSCAD(
       openscad.callMain(["/input.scad", "-o", "/output.stl"]);
     } catch (e) {
       openscad.FS.unlink("/input.scad");
-      return { success: false, error: openScadErrors[0] || String(e) };
+      result = { success: false, error: openScadErrors[0] || String(e) };
+      busy = false;
+      return result;
     }
 
     onProgress?.(80, "处理编译结果...");
@@ -94,26 +102,33 @@ export async function compileSCAD(
       if (stat.size === 0) {
         openscad.FS.unlink("/input.scad");
         openscad.FS.unlink("/output.stl");
-        return { success: false, error: openScadErrors[0] || "OpenSCAD 编译失败（输出文件为空）" };
+        result = { success: false, error: openScadErrors[0] || "OpenSCAD 编译失败（输出文件为空）" };
+      } else {
+        const rawResult = openscad.FS.readFile("/output.stl");
+        const binaryData = rawResult instanceof Uint8Array ? rawResult : new Uint8Array(rawResult);
+        openscad.FS.unlink("/input.scad");
+        openscad.FS.unlink("/output.stl");
+        onProgress?.(100, "编译完成");
+        result = { success: true, stlBuffer: binaryData, openScadErrors };
       }
-      const rawResult = openscad.FS.readFile("/output.stl");
-      const binaryData = rawResult instanceof Uint8Array ? rawResult : new Uint8Array(rawResult);
-      openscad.FS.unlink("/input.scad");
-      openscad.FS.unlink("/output.stl");
-      onProgress?.(100, "编译完成");
-      return { success: true, stlBuffer: binaryData, openScadErrors };
     } catch {
       openscad.FS.unlink("/input.scad");
       try { openscad.FS.unlink("/output.stl"); } catch {}
-      return { success: false, error: openScadErrors[0] || "OpenSCAD 编译失败" };
+      result = { success: false, error: openScadErrors[0] || "OpenSCAD 编译失败" };
     }
   } catch (err: any) {
     console.error("Compile error:", err);
-    const msg = err?.message || err?.toString() || "编译过程中发生未知错误";
-    return { success: false, error: msg };
+    result = { success: false, error: err?.message || err?.toString() || "编译过程中发生未知错误" };
   }
+
+  busy = false;
+  return result;
 }
 
 export function isWASMReady(): boolean {
   return isReady;
+}
+
+export function isCompiling(): boolean {
+  return busy;
 }

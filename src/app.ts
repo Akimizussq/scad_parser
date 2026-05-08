@@ -13,11 +13,13 @@ export function init(container: HTMLElement): void {
 }
 
 export async function loadSCAD(source: string): Promise<void> {
+  if (compileTimeout) clearTimeout(compileTimeout);
+
   currentSource = source;
   params = extractParams(source);
   renderParams(params);
 
-  const { initWASM, compileSCAD, isWASMReady } = await import("./engine/wasm");
+  const { initWASM, compileSCAD, isWASMReady, isCompiling } = await import("./engine/wasm");
 
   const showLoading = (progress: number, message: string) => {
     const overlay = document.getElementById("loadingOverlay");
@@ -46,6 +48,17 @@ export async function loadSCAD(source: string): Promise<void> {
 
     showLoading(20, "正在编译模型...");
     setStatus("正在编译...");
+
+    if (isCompiling()) {
+      showLoading(20, "等待上一个编译完成...");
+      await new Promise<void>((resolve) => {
+        const check = () => {
+          if (!isCompiling()) resolve();
+          else setTimeout(check, 200);
+        };
+        check();
+      });
+    }
 
     const result = await compileSCAD(source, showLoading);
 
