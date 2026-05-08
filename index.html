@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SCAD Viewer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>SCAD Viewer</h1>
+      <div class="header-actions">
+        <button id="uploadBtn" class="btn-primary">
+          <span class="upload-icon">↑</span>
+          上传 .scad 文件
+        </button>
+        <input type="file" id="fileInput" accept=".scad" style="display: none" />
+      </div>
+    </header>
+
+    <main>
+      <aside id="paramPanel" class="panel sidebar">
+        <h2>参数控制</h2>
+        <div id="paramList" class="param-list">
+          <p class="placeholder-text">上传 .scad 文件后自动提取参数</p>
+        </div>
+      </aside>
+
+      <section id="viewerContainer" class="viewer-section">
+        <div id="loadingOverlay" class="loading-overlay hidden">
+          <div class="spinner"></div>
+          <p id="loadingText">正在加载 OpenSCAD...</p>
+          <div id="progressBar" class="progress-bar">
+            <div id="progressFill"></div>
+          </div>
+        </div>
+        <div id="canvasContainer"></div>
+      </section>
+    </main>
+
+    <footer id="statusBar" class="status-bar">
+      <span id="statusText">就绪</span>
+      <div class="footer-actions">
+        <button id="resetCameraBtn" class="btn-secondary" title="重置视角">
+          ⟲ 重置视角
+        </button>
+        <button id="exportBtn" class="btn-secondary" title="导出 STL">
+          ⬇ 导出 STL
+        </button>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

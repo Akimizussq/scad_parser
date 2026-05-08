@@ -1,0 +1,20 @@
+{
+  "name": "scad-viewer",
+  "version": "1.0.0",
+  "description": "Web-based OpenSCAD viewer using openscad-wasm and Three.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "openscad-wasm": "^0.0.4",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}
