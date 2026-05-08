@@ -1,5 +1,5 @@
 import { parseSTL } from "./engine/parser";
-import { extractParams, ParamConfig } from "./engine/params";
+import { extractParams, applyParams, ParamConfig } from "./engine/params";
 import { CADViewer } from "./viewer/renderer";
 import * as THREE from "three";
 
@@ -82,8 +82,61 @@ export function updateParam(name: string, value: number): void {
 
 function debouncedRecompile(): void {
   if (compileTimeout) clearTimeout(compileTimeout);
-  compileTimeout = setTimeout(() => {
-    loadSCAD(currentSource).catch(console.error);
+  compileTimeout = setTimeout(async () => {
+    const modifiedSource = applyParams(currentSource, params);
+    const { initWASM, compileSCAD, isWASMReady } = await import("./engine/wasm");
+
+    const showLoading = (progress: number, message: string) => {
+      const overlay = document.getElementById("loadingOverlay");
+      const text = document.getElementById("loadingText");
+      const fill = document.getElementById("progressFill");
+      if (overlay) overlay.classList.remove("hidden");
+      if (text) text.textContent = message;
+      if (fill) fill.style.width = `${progress}%`;
+    };
+
+    const hideLoading = () => {
+      const overlay = document.getElementById("loadingOverlay");
+      if (overlay) overlay.classList.add("hidden");
+    };
+
+    const setStatus = (msg: string) => {
+      const el = document.getElementById("statusText");
+      if (el) el.textContent = msg;
+    };
+
+    try {
+      if (!isWASMReady()) {
+        await initWASM(undefined, showLoading);
+      }
+
+      showLoading(20, "正在编译模型...");
+      setStatus("正在编译...");
+
+      const result = await compileSCAD(modifiedSource, showLoading);
+
+      if (result.success && result.stlBuffer) {
+        showLoading(80, "正在解析模型...");
+        setStatus("正在解析几何数据...");
+
+        const geometry = parseSTL(result.stlBuffer);
+
+        showLoading(95, "正在渲染...");
+        if (viewer) {
+          viewer.loadGeometry(geometry);
+        }
+
+        setStatus(`模型已加载 (顶点: ${geometry.attributes.position.count})`);
+        hideLoading();
+      } else {
+        const errMsg = result.openScadErrors?.[0] || result.error;
+        setStatus(`编译失败: ${errMsg}`);
+        hideLoading();
+      }
+    } catch (err: any) {
+      setStatus(`错误: ${err?.message || "未知错误"}`);
+      hideLoading();
+    }
   }, 500);
 }
 

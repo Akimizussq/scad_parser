@@ -8,5 +8,16 @@ export default defineConfig({
   build: {
     target: "es2020",
     outDir: "dist",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ["three"],
+          openscad: ["openscad-wasm"],
+        },
+      },
+    },
+  },
+  optimizeDeps: {
+    exclude: ["openscad-wasm"],
   },
 });
