@@ -76,11 +76,21 @@ function estimateStep(min: number, max: number): number {
   return 100;
 }
 
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const NUMERIC_PATTERN = "[-+]?\\d+\\.?\\d*(?:[eE][-+]?\\d+)?";
+
 export function applyParams(source: string, params: ParamConfig[]): string {
   let result = source;
 
   for (const param of params) {
-    const regex = new RegExp(`\\b${param.name}\\s*=\\s*[\\d.]+\\s*;`, "g");
+    const nameEscaped = escapeRegExp(param.name);
+    const regex = new RegExp(
+      `\\b${nameEscaped}\\s*=\\s*${NUMERIC_PATTERN}\\s*;`,
+      "g"
+    );
     result = result.replace(regex, `${param.name} = ${param.default};`);
   }
 

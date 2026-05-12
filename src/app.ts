@@ -8,6 +8,16 @@ let currentSource = "";
 let params: ParamConfig[] = [];
 let compileTimeout: ReturnType<typeof setTimeout> | null = null;
 
+async function waitForCompileReady(timeoutMs = 10000): Promise<boolean> {
+  const { isCompiling } = await import("./engine/wasm");
+  const start = Date.now();
+  while (isCompiling()) {
+    if (Date.now() - start > timeoutMs) return false;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return true;
+}
+
 export function init(container: HTMLElement): void {
   viewer = new CADViewer(container);
 }
@@ -51,13 +61,7 @@ export async function loadSCAD(source: string): Promise<void> {
 
     if (isCompiling()) {
       showLoading(20, "等待上一个编译完成...");
-      await new Promise<void>((resolve) => {
-        const check = () => {
-          if (!isCompiling()) resolve();
-          else setTimeout(check, 200);
-        };
-        check();
-      });
+      await waitForCompileReady();
     }
 
     const result = await compileSCAD(source, showLoading);
@@ -76,7 +80,8 @@ export async function loadSCAD(source: string): Promise<void> {
       setStatus(`模型已加载 (顶点: ${geometry.attributes.position.count})`);
       hideLoading();
     } else {
-      setStatus(`编译失败: ${result.error}`);
+      const errMsg = result.openScadErrors?.[0] || result.error;
+      setStatus(`编译失败: ${errMsg}`);
       hideLoading();
     }
   } catch (err: any) {
@@ -86,6 +91,7 @@ export async function loadSCAD(source: string): Promise<void> {
 }
 
 export function updateParam(name: string, value: number): void {
+  if (!Number.isFinite(value)) return;
   const param = params.find((p) => p.name === name);
   if (!param) return;
   param.default = value;
@@ -97,7 +103,7 @@ function debouncedRecompile(): void {
   if (compileTimeout) clearTimeout(compileTimeout);
   compileTimeout = setTimeout(async () => {
     const modifiedSource = applyParams(currentSource, params);
-    const { initWASM, compileSCAD, isWASMReady } = await import("./engine/wasm");
+    const { initWASM, compileSCAD, isWASMReady, isCompiling } = await import("./engine/wasm");
 
     const showLoading = (progress: number, message: string) => {
       const overlay = document.getElementById("loadingOverlay");
@@ -119,6 +125,16 @@ function debouncedRecompile(): void {
     };
 
     try {
+      if (isCompiling()) {
+        showLoading(20, "等待上一个编译完成...");
+        const ready = await waitForCompileReady();
+        if (!ready) {
+          setStatus("编译超时，请重试");
+          hideLoading();
+          return;
+        }
+      }
+
       if (!isWASMReady()) {
         await initWASM(undefined, showLoading);
       }
@@ -189,6 +205,7 @@ function renderParams(configs: ParamConfig[]): void {
       const target = e.target as HTMLInputElement;
       const name = target.id.replace("param-", "");
       const value = parseFloat(target.value);
+      if (!Number.isFinite(value)) return;
       updateParam(name, value);
 
       const numInput = target
@@ -201,13 +218,18 @@ function renderParams(configs: ParamConfig[]): void {
   container.querySelectorAll('input[type="number"]').forEach((numInput) => {
     numInput.addEventListener("change", (e) => {
       const target = e.target as HTMLInputElement;
+      const val = parseFloat(target.value);
+      if (!Number.isFinite(val)) {
+        target.value = target.defaultValue;
+        return;
+      }
       const slider = target
         .closest(".param-group")
         ?.querySelector('input[type="range"]') as HTMLInputElement;
       if (slider) {
         slider.value = target.value;
         const name = slider.id.replace("param-", "");
-        updateParam(name, parseFloat(target.value));
+        updateParam(name, val);
       }
     });
   });
